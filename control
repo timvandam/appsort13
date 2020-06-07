@@ -1,0 +1,9 @@
+Package: nl.timvd.appsort13
+Name: appsort13
+Depends: mobilesubstrate, libactivator
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: Sort your apps!
+Maintainer: Tim
+Author: Tim
+Section: Tweaks

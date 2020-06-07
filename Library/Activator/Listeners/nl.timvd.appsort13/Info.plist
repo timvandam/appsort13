@@ -1,0 +1,6 @@
+{
+    group = "AppSort13";
+    title = "Sort Apps by Hue";
+    description = "Sort your apps based on their icon's color";
+    "compatible-modes" = ("springboard");
+}
