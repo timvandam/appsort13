@@ -7,26 +7,30 @@
 3. allow users to change activation methods
 */
 
-@interface AppSort13 : NSObject <LAListener>
--(void)activator:(LAActivator*)activator receiveEvent:(LAEvent*)event;
--(void)activator:(LAActivator*)activator abortEvent:(LAEvent*)event;
+@interface AlertWindow : UIWindow
+-(void)showAlert;
+
+@property UIViewController* uv;
+@property UIAlertController* alert;
 @end
 
-@implementation AppSort13
--(void)activator:(LAActivator*)activator receiveEvent:(LAEvent*)event {
-	AudioServicesPlaySystemSound(1519); // light haptic feedback
+@implementation AlertWindow : UIWindow
+-(instancetype)init {
+	self = [super init];
+	self.frame = [[UIScreen mainScreen] bounds];
 
-	[AppSort13 showAlert];
+	[self createAlert];
 
-    [event setHandled: YES];
+	self.uv = [[UIViewController alloc] init];
+
+	self.windowLevel = UIWindowLevelNormal; // Alert is part of the springboard, so don't put it over other stuff
+	self.rootViewController = self.uv;
+	[self setBackgroundColor:[UIColor clearColor]];
+
+	return self;
 }
-
--(void)activator:(LAActivator*)activator abortEvent:(LAEvent*)event {
-    [event setHandled: YES];
-}
-
-+(void)showAlert {
-	UIAlertController* alert = [UIAlertController
+-(void)createAlert {
+	self.alert = [UIAlertController
 		alertControllerWithTitle:@"AppSort13"
 		message:@"Choose a way to sort your apps below\nThere is no going back!"
 		preferredStyle:UIAlertControllerStyleActionSheet];
@@ -46,20 +50,48 @@
 		style:UIAlertActionStyleCancel
 		handler:^(UIAlertAction* action) {}];
 
-	[alert addAction:hue];
-	[alert addAction:alphabetical];
-	[alert addAction:cancel];
+	[self.alert addAction:hue];
+	[self.alert addAction:alphabetical];
+	[self.alert addAction:cancel];
+}
+-(void)showAlert {
+	[self makeKeyAndVisible];
+	[self.uv presentViewController:self.alert animated:YES completion:nil];
+}
+-(void)hideAlert {
+	[self.uv dismissViewControllerAnimated:YES completion:nil];
+}
+-(void)willMoveToWindow:(UIWindow*)newWindow {
+	[self hideAlert];
+}
+-(void)willRemoveSubview:(UIView*)subview {
+	[self hideAlert];
+}
+-(void)willMoveToSuperview:(UIView*)newSuperview {
+	[self hideAlert];
+}
+@end
 
-	UIWindow* aWindow = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
-	aWindow.windowLevel = UIWindowLevelAlert;
+@interface AppSort13 : NSObject <LAListener>
+-(void)activator:(LAActivator*)activator receiveEvent:(LAEvent*)event;
+-(void)activator:(LAActivator*)activator abortEvent:(LAEvent*)event;
+@property AlertWindow* alertWindow;
+@end
 
-	UIViewController* uv = [UIViewController new];
-	aWindow.rootViewController = uv;
+@implementation AppSort13
+-(void)activator:(LAActivator*)activator receiveEvent:(LAEvent*)event {
+	AudioServicesPlaySystemSound(1519); // light haptic feedback
 
-	[aWindow setBackgroundColor:[UIColor clearColor]];
-	[aWindow makeKeyAndVisible];
+	if (self.alertWindow == nil) {
+		self.alertWindow = [[AlertWindow alloc] init];
+	}
+	[self.alertWindow showAlert];
 
-	[uv presentViewController:alert animated:YES completion:nil];
+    [event setHandled: YES];
+}
+
+-(void)activator:(LAActivator*)activator abortEvent:(LAEvent*)event {
+    [event setHandled: YES];
 }
 @end
 
