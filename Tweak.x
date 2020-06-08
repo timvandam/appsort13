@@ -3,6 +3,9 @@
 #import <AppList/AppList.h>
 #include <RemoteLog.h>
 
+#define MAX3(a, b, c) MAX(MAX(a, b), c)
+#define MIN3(a, b, c) MIN(MIN(a, b), c)
+
 @interface UIImage (AppSort13)
 -(float)hue;
 +(float)computeHueR:(float)r G:(float)G B:(float)B;
@@ -26,7 +29,7 @@
 	
 	CIImage* outputImg = filter.outputImage;
 
-	uint8_t rgba[] = { 0, 0, 0, 0 };
+	uint8_t rgba[4] = { 0, 0, 0, 0 };
 	CIContext* context = [CIContext contextWithOptions:@{
 		@"kCIContextWorkingColorSpace": [NSNull null]
 	}];
@@ -52,24 +55,25 @@
 	float b = (float) rgba[2] / 255;
 
 	RLog(@"%f %f %f", r, g, b);
-	RLog(@"%d %d %d", rgba[0], rgba[1], rgba[2]);
 
 	return [UIImage computeHueR:r G:g B:b];
 }
+// TODO: Fix this sometimes yielding -+inf and/or nan. nan should prolly be 0 (dividing by 0?)
 +(float)computeHueR:(float)R G:(float)G B:(float)B {
-	if (R >= G) {
-		if (G >= B) return 60 * (G-B)/(R-B);
-		else if (B > G) return 60 * (6 - (B-G)/(R-G));
-	}
-	if (G > R) {
-		if (R >= B) return 60 * (2 - (R-B)/(G-B));
-		else if (G >= B) return 60 * (2 + (B-R)/(G-R));
-	}
-	if (B > G) {
-		if (G > R) return 60 * (4 - (G-R)/(B-R));
-		else if (R >= G) return 60 * (4 + (R-G)/(B-G));
-	}
-	return 0;
+	float max = MAX3(R, G, B);
+	float min = MIN3(R, G, B);
+
+	float result = 0;
+	if (max == min) return result;
+
+	if (R == max) result = (G-B)/(max-min);
+	else if (G == max) result = 2 + (B-R)/(max-min);
+	else if (B == max) result = 4 + (R-G)/(max-min);
+
+	result *= 60;
+	while (result < 0) result += 360;	
+
+	return result;
 }
 @end
 
@@ -80,13 +84,24 @@
 @property (copy,readonly) NSString * description;
 @end
 
+@interface SBIconCoordinate
+@end
+
+@interface SBIconListModel
+-(void)removeIcon:(id)arg1;
+-(void)setIcons:(NSArray *)arg1;
+-(id)placeIcon:(id)arg1 atIndex:(unsigned long long)arg2;
+@end
+
 @interface SBIconListView
 @property (nonatomic,copy,readonly) NSArray* icons;
 -(id)iconViewForIcon:(id)arg1;
+@property (nonatomic,retain) SBIconListModel* model;
 @end
 
 @interface SBFolderController
 @property (nonatomic,copy,readonly) NSArray* iconListViews; // array of SBIconListView
+-(id)addEmptyListView; // TODO: Use when putting down icons. Remove all list views, add a new one until were out of icons
 @end
 
 @interface SBRootFolderController : SBFolderController
@@ -108,19 +123,21 @@
 -(void)sort {
 	// TODO: Dictionary of all icons, then sort and re-place them
 	// Each icon is either an application or a folder (or an internet shortcut ig)
-	for (SBIconListView* listView in [self._currentFolderController iconListViews]) {
+	for (SBIconListView* listView in [self._rootFolderController iconListViews]) {
+		RLog(@"%@", [listView model]);//SBIconListModel to control icon placement?!
 		RLog(@"There are %d icons", [[listView icons] count]);
+		NSArray* reverse = [[[listView icons] reverseObjectEnumerator] allObjects];
+		[[listView model] setIcons:reverse];
 		for (SBIcon* icon in [listView icons]) {
 			float hue = 0;
 			if ([icon isFolderIcon]) {
-				RLog(@"Folder = %@", [icon displayName]); // folders have an -(SBFolder)folder
+				RLog(@"Folder = %@", [icon displayName]); // folders have an -(SBFolder)folder. SBFolderView with SBIconScrollView to get apps
 			} else {
 				RLog(@"Icon = %@", [icon displayName]);
 				SBIconView* iconView = [listView iconViewForIcon: icon];
 				UIImage* image  = iconView.iconImageSnapshot;
 				hue = [image hue];
 			}
-			RLog(@"Description = %@", [icon description]);
 			RLog(@"Hue = %f", hue);
 		}
 	}
