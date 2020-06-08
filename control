@@ -1,6 +1,6 @@
 Package: nl.timvd.appsort13
 Name: appsort13
-Depends: mobilesubstrate, libactivator
+Depends: mobilesubstrate, libactivator, firmware (>= 3.0), com.rpetrich.rocketbootstrap (>= 1.0.3) | firmware (<< 7.0)
 Version: 0.0.1
 Architecture: iphoneos-arm
 Description: Sort your apps!

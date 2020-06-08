@@ -1,20 +1,22 @@
 #import <libactivator/libactivator.h>
 #import <AudioToolbox/AudioToolbox.h>
-
-/*
-1. Describe action
-2. Implement it
-3. allow users to change activation methods
-*/
+#import <AppList/AppList.h>
+#include <RemoteLog.h>
 
 @interface AlertWindow : UIWindow
++(BOOL)alertShowing;
 -(void)showAlert;
+-(void)createAlert;
 
 @property UIViewController* uv;
 @property UIAlertController* alert;
 @end
 
 @implementation AlertWindow : UIWindow
+static BOOL alertShowing = NO;
++(BOOL)alertShowing {
+	return alertShowing;
+}
 -(instancetype)init {
 	self = [super init];
 	self.frame = [[UIScreen mainScreen] bounds];
@@ -38,54 +40,60 @@
 	UIAlertAction* hue = [UIAlertAction
 		actionWithTitle:@"Hue"
 		style:UIAlertActionStyleDestructive
-		handler:^(UIAlertAction* action) {}];
+		handler:^(UIAlertAction* action) {
+			RLog(@"hue");
+			alertShowing = NO;
+		}];
 
 	UIAlertAction* alphabetical = [UIAlertAction
 		actionWithTitle:@"Alphabetical"
 		style:UIAlertActionStyleDestructive
-		handler:^(UIAlertAction* action) {}];
+		handler:^(UIAlertAction* action) {
+			RLog(@"alphabetical");
+			alertShowing = NO;
+		}];
 
 	UIAlertAction* cancel = [UIAlertAction
 		actionWithTitle:@"Cancel"
 		style:UIAlertActionStyleCancel
-		handler:^(UIAlertAction* action) {}];
+		handler:^(UIAlertAction* action) {
+			RLog(@"cancel");
+			alertShowing = NO;
+		}];
 
 	[self.alert addAction:hue];
 	[self.alert addAction:alphabetical];
 	[self.alert addAction:cancel];
 }
 -(void)showAlert {
+	alertShowing = YES;
 	[self makeKeyAndVisible];
 	[self.uv presentViewController:self.alert animated:YES completion:nil];
 }
--(void)hideAlert {
-	[self.uv dismissViewControllerAnimated:YES completion:nil];
-}
--(void)willMoveToWindow:(UIWindow*)newWindow {
-	[self hideAlert];
-}
--(void)willRemoveSubview:(UIView*)subview {
-	[self hideAlert];
-}
--(void)willMoveToSuperview:(UIView*)newSuperview {
-	[self hideAlert];
-}
 @end
+
 
 @interface AppSort13 : NSObject <LAListener>
 -(void)activator:(LAActivator*)activator receiveEvent:(LAEvent*)event;
 -(void)activator:(LAActivator*)activator abortEvent:(LAEvent*)event;
-@property AlertWindow* alertWindow;
 @end
 
 @implementation AppSort13
 -(void)activator:(LAActivator*)activator receiveEvent:(LAEvent*)event {
-	AudioServicesPlaySystemSound(1519); // light haptic feedback
+	if (AlertWindow.alertShowing) return; // only show if not already showing
 
-	if (self.alertWindow == nil) {
-		self.alertWindow = [[AlertWindow alloc] init];
+	AudioServicesPlaySystemSound(1519); // light haptic feedback
+	RLog(@"menu will now pop up");
+
+	NSDictionary* apps = [[ALApplicationList sharedApplicationList] applications];
+	for (NSString* app in apps) {
+		UIImage* icon = [[ALApplicationList sharedApplicationList] iconOfSize:ALApplicationIconSizeLarge forDisplayIdentifier:app];
+		if (icon == nil) RLog(@"App %@ has no icon, skip it", apps[app]);
+		else RLog(@"App %@ has an icon. Now implement getting the avg. color!", apps[app]);
 	}
-	[self.alertWindow showAlert];
+	
+
+	[[[AlertWindow alloc] init] showAlert];
 
     [event setHandled: YES];
 }
@@ -95,6 +103,7 @@
 }
 @end
 
+
 %ctor {
-	[LASharedActivator registerListener:[[AppSort13 alloc] init] forName:@"nl.timvd.appsort13"];
+	[LASharedActivator registerListener:[[AppSort13 alloc] init] forName:@"nl.timvd.appsort13"];	
 }
