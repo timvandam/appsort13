@@ -4,11 +4,11 @@
 #include <RemoteLog.h>
 
 @interface UIImage (AppSort13)
--(NSString*)averageColor;
+-(NSString*)hue;
 @end
 
 @implementation UIImage (AppSort13)
--(NSString*)averageColor {
+-(NSString*)hue {
 	CIImage* img = [[CIImage alloc] initWithImage: self];
 	CIVector* extentVector = [CIVector
 		vectorWithX:img.extent.origin.x
@@ -24,18 +24,40 @@
 		}];
 	
 	CIImage* outputImg = filter.outputImage;
-	if (outputImg != nil) RLog(@"filter works");
 
-	return @"red"; // TODO: Return hex
+	uint8_t rgba[] = { 0, 0, 0, 0 };
+	CIContext* context = [CIContext contextWithOptions:@{
+		@"kCIContextWorkingColorSpace": [NSNull null]
+	}];
+	struct CGRect bounds;
+	bounds.origin.x = 0;
+	bounds.origin.y = 0;
+	bounds.size.width = 1;
+	bounds.size.height = 1;
+	[context render:outputImg
+		toBitmap:&rgba
+		rowBytes:4
+		bounds:bounds
+		format:kCIFormatRGBA8
+		colorSpace: nil];
+
+	RLog(@"%02x%02x%02x",
+		rgba[0],
+		rgba[1],
+		rgba[2]);
+
+
+	return @"red"; // TODO: Return hue
 }
 @end
 
 @interface SBIcon
 -(id)applicationBundleID;
+-(NSString *)displayName;
 @end
 
 @interface SBIconListView
-@property (nonatomic,copy,readonly) NSArray* visibleIcons;
+@property (nonatomic,copy,readonly) NSArray* icons;
 
 -(id)iconViewForIcon:(id)arg1;
 @end
@@ -61,12 +83,13 @@
 %new
 -(void)sort {
 	for (SBIconListView* listView in [self._rootFolderController iconListViews]) {
-		for (SBIcon* icon in [listView visibleIcons]) {
-			RLog(@"Found an icon!%@", [icon applicationBundleID]);
+		for (SBIcon* icon in [listView icons]) {
+			RLog(@"Icon = %@", [icon displayName]);
 			if ([icon applicationBundleID] == nil) return;
 			SBIconView* iconView = [listView iconViewForIcon: icon];
 			UIImage* image  = iconView.iconImageSnapshot;
-			RLog(@"Avg color: %@", [image averageColor]);
+			RLog(@"Icon = %@", [icon displayName]);
+			[image hue];
 		}
 	}
 }
