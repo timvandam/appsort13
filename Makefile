@@ -1,6 +1,6 @@
-export SDKVERSION = 11.2
+export SDKVERSION = 13.5
 
-ARCHS = arm64
+ARCHS = arm64 arm64e
 
 THEOS_DEVICE_IP = 192.168.0.102
 

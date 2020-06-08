@@ -4,11 +4,12 @@
 #include <RemoteLog.h>
 
 @interface UIImage (AppSort13)
--(NSString*)hue;
+-(float)hue;
++(float)computeHueR:(float)r G:(float)G B:(float)B;
 @end
 
 @implementation UIImage (AppSort13)
--(NSString*)hue {
+-(float)hue {
 	CIImage* img = [[CIImage alloc] initWithImage: self];
 	CIVector* extentVector = [CIVector
 		vectorWithX:img.extent.origin.x
@@ -41,24 +42,46 @@
 		format:kCIFormatRGBA8
 		colorSpace: nil];
 
-	RLog(@"%02x%02x%02x",
+	RLog(@"Hex = %02x%02x%02x",
 		rgba[0],
 		rgba[1],
 		rgba[2]);
 
+	float r = (float) rgba[0] / 255;
+	float g = (float) rgba[1] / 255;
+	float b = (float) rgba[2] / 255;
 
-	return @"red"; // TODO: Return hue
+	RLog(@"%f %f %f", r, g, b);
+	RLog(@"%d %d %d", rgba[0], rgba[1], rgba[2]);
+
+	return [UIImage computeHueR:r G:g B:b];
+}
++(float)computeHueR:(float)R G:(float)G B:(float)B {
+	if (R >= G) {
+		if (G >= B) return 60 * (G-B)/(R-B);
+		else if (B > G) return 60 * (6 - (B-G)/(R-G));
+	}
+	if (G > R) {
+		if (R >= B) return 60 * (2 - (R-B)/(G-B));
+		else if (G >= B) return 60 * (2 + (B-R)/(G-R));
+	}
+	if (B > G) {
+		if (G > R) return 60 * (4 - (G-R)/(B-R));
+		else if (R >= G) return 60 * (4 + (R-G)/(B-G));
+	}
+	return 0;
 }
 @end
 
 @interface SBIcon
 -(id)applicationBundleID;
 -(NSString *)displayName;
+-(BOOL)isFolderIcon;
+@property (copy,readonly) NSString * description;
 @end
 
 @interface SBIconListView
 @property (nonatomic,copy,readonly) NSArray* icons;
-
 -(id)iconViewForIcon:(id)arg1;
 @end
 
@@ -77,19 +100,28 @@
 +(id)sharedInstance;
 -(void)sort;
 @property (getter=_rootFolderController,nonatomic,readonly) SBRootFolderController* rootFolderController;
+@property (getter=_currentFolderController,nonatomic,readonly) SBFolderController * currentFolderController;
 @end
 
 %hook SBIconController
 %new
 -(void)sort {
-	for (SBIconListView* listView in [self._rootFolderController iconListViews]) {
+	// TODO: Dictionary of all icons, then sort and re-place them
+	// Each icon is either an application or a folder (or an internet shortcut ig)
+	for (SBIconListView* listView in [self._currentFolderController iconListViews]) {
+		RLog(@"There are %d icons", [[listView icons] count]);
 		for (SBIcon* icon in [listView icons]) {
-			RLog(@"Icon = %@", [icon displayName]);
-			if ([icon applicationBundleID] == nil) return;
-			SBIconView* iconView = [listView iconViewForIcon: icon];
-			UIImage* image  = iconView.iconImageSnapshot;
-			RLog(@"Icon = %@", [icon displayName]);
-			[image hue];
+			float hue = 0;
+			if ([icon isFolderIcon]) {
+				RLog(@"Folder = %@", [icon displayName]); // folders have an -(SBFolder)folder
+			} else {
+				RLog(@"Icon = %@", [icon displayName]);
+				SBIconView* iconView = [listView iconViewForIcon: icon];
+				UIImage* image  = iconView.iconImageSnapshot;
+				hue = [image hue];
+			}
+			RLog(@"Description = %@", [icon description]);
+			RLog(@"Hue = %f", hue);
 		}
 	}
 }
