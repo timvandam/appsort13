@@ -3,6 +3,79 @@
 #import <AppList/AppList.h>
 #include <RemoteLog.h>
 
+@interface UIImage (AppSort13)
+-(NSString*)averageColor;
+@end
+
+@implementation UIImage (AppSort13)
+-(NSString*)averageColor {
+	CIImage* img = [[CIImage alloc] initWithImage: self];
+	CIVector* extentVector = [CIVector
+		vectorWithX:img.extent.origin.x
+		Y:img.extent.origin.y
+		Z:img.extent.size.width
+		W:img.extent.size.height];
+
+	CIFilter* filter = [CIFilter
+		filterWithName:@"CIAreaAverage"
+		withInputParameters: @{
+			@"inputImage": img,
+			@"inputExtent": extentVector
+		}];
+	
+	CIImage* outputImg = filter.outputImage;
+	if (outputImg != nil) RLog(@"filter works");
+
+	return @"red"; // TODO: Return hex
+}
+@end
+
+@interface SBIcon
+-(id)applicationBundleID;
+@end
+
+@interface SBIconListView
+@property (nonatomic,copy,readonly) NSArray* visibleIcons;
+
+-(id)iconViewForIcon:(id)arg1;
+@end
+
+@interface SBFolderController
+@property (nonatomic,copy,readonly) NSArray* iconListViews; // array of SBIconListView
+@end
+
+@interface SBRootFolderController : SBFolderController
+@end
+
+@interface SBIconView
+@property (nonatomic,readonly) UIImage* iconImageSnapshot;
+@end
+
+@interface SBIconController
++(id)sharedInstance;
+-(void)sort;
+@property (getter=_rootFolderController,nonatomic,readonly) SBRootFolderController* rootFolderController;
+@end
+
+%hook SBIconController
+%new
+-(void)sort {
+	for (SBIconListView* listView in [self._rootFolderController iconListViews]) {
+		for (SBIcon* icon in [listView visibleIcons]) {
+			RLog(@"Found an icon!%@", [icon applicationBundleID]);
+			if ([icon applicationBundleID] == nil) return;
+			SBIconView* iconView = [listView iconViewForIcon: icon];
+			UIImage* image  = iconView.iconImageSnapshot;
+			RLog(@"Avg color: %@", [image averageColor]);
+		}
+	}
+}
+%end
+
+
+
+
+
 @interface AlertWindow : UIWindow
 +(BOOL)alertShowing;
 -(void)showAlert;
@@ -42,6 +115,7 @@ static BOOL alertShowing = NO;
 		style:UIAlertActionStyleDestructive
 		handler:^(UIAlertAction* action) {
 			RLog(@"hue");
+			[[%c(SBIconController) sharedInstance] sort];
 			alertShowing = NO;
 		}];
 
@@ -85,13 +159,12 @@ static BOOL alertShowing = NO;
 	AudioServicesPlaySystemSound(1519); // light haptic feedback
 	RLog(@"menu will now pop up");
 
-	NSDictionary* apps = [[ALApplicationList sharedApplicationList] applications];
+	/*NSDictionary* apps = [[ALApplicationList sharedApplicationList] applications];
 	for (NSString* app in apps) {
 		UIImage* icon = [[ALApplicationList sharedApplicationList] iconOfSize:ALApplicationIconSizeLarge forDisplayIdentifier:app];
 		if (icon == nil) RLog(@"App %@ has no icon, skip it", apps[app]);
 		else RLog(@"App %@ has an icon. Now implement getting the avg. color!", apps[app]);
-	}
-	
+	}*/
 
 	[[[AlertWindow alloc] init] showAlert];
 
