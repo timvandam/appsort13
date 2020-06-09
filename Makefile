@@ -10,7 +10,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = appsort13
 
-appsort13_FILES = Tweak.x
+appsort13_FILES = IconImageProcessing.x Tweak.x
 appsort13_CFLAGS = -fobjc-arc
 appsort13_LIBRARIES = activator
 appsort13_FRAMEWORKS = AudioToolbox UIKit CoreImage
