@@ -1,18 +1,17 @@
 #import <libactivator/libactivator.h>
 #import <AudioToolbox/AudioToolbox.h>
-#import <AppList/AppList.h>
 #include <RemoteLog.h>
 
 #define MAX3(a, b, c) MAX(MAX(a, b), c)
 #define MIN3(a, b, c) MIN(MIN(a, b), c)
 
 @interface UIImage (AppSort13)
--(float)hue;
-+(float)computeHueR:(float)r G:(float)G B:(float)B;
+-(uint)hue;
++(uint)computeR:(uint8_t)R G:(uint8_t)G B:(uint8_t)B;
 @end
 
 @implementation UIImage (AppSort13)
--(float)hue {
+-(uint)hue {
 	CIImage* img = [[CIImage alloc] initWithImage: self];
 	CIVector* extentVector = [CIVector
 		vectorWithX:img.extent.origin.x
@@ -21,7 +20,7 @@
 		W:img.extent.size.height];
 
 	CIFilter* filter = [CIFilter
-		filterWithName:@"CIAreaAverage"
+		filterWithName:@"CIAreaMaximumAlpha" // CIAreaAverage CIAreaMaximum
 		withInputParameters: @{
 			@"inputImage": img,
 			@"inputExtent": extentVector
@@ -45,35 +44,30 @@
 		format:kCIFormatRGBA8
 		colorSpace: nil];
 
-	RLog(@"Hex = %02x%02x%02x",
-		rgba[0],
-		rgba[1],
-		rgba[2]);
+	// RLog(@"Hex = %02x%02x%02x",
+		// rgba[0],
+		// rgba[1],
+		// rgba[2]);
 
-	float r = (float) rgba[0] / 255;
-	float g = (float) rgba[1] / 255;
-	float b = (float) rgba[2] / 255;
+	uint r = (uint) rgba[0];
+	uint g = (uint) rgba[1];
+	uint b = (uint) rgba[2];
 
-	RLog(@"%f %f %f", r, g, b);
+	// RLog(@"%f %f %f", r, g, b);
 
-	return [UIImage computeHueR:r G:g B:b];
+	return [UIImage computeR:r G:g B:b];
 }
-// TODO: Fix this sometimes yielding -+inf and/or nan. nan should prolly be 0 (dividing by 0?)
-+(float)computeHueR:(float)R G:(float)G B:(float)B {
-	float max = MAX3(R, G, B);
-	float min = MIN3(R, G, B);
++(uint)computeR:(uint8_t)R G:(uint8_t)G B:(uint8_t)B {
+	uint result = 0;
 
-	float result = 0;
-	if (max == min) return result;
+	result += (R << 16);
+	result += (G << 8);
+	result += B;
+	result *= R;
+	result *= G;
+	result *= B;
 
-	if (R == max) result = (G-B)/(max-min);
-	else if (G == max) result = 2 + (B-R)/(max-min);
-	else if (B == max) result = 4 + (R-G)/(max-min);
-
-	result *= 60;
-	while (result < 0) result += 360;	
-
-	return result;
+	return result / (R+G+B);
 }
 @end
 
@@ -88,27 +82,49 @@
 @end
 
 @interface SBIconListModel
+@property (nonatomic,copy) NSArray * icons;
+-(unsigned long long)indexForIcon:(id)arg1;
 -(void)removeIcon:(id)arg1;
 -(void)setIcons:(NSArray *)arg1;
+-(void)addIcons:(NSArray *)arg1;
 -(id)placeIcon:(id)arg1 atIndex:(unsigned long long)arg2;
+-(void)removeAllIcons;
+-(id)placeIcon:(id)arg1 atIndex:(unsigned long long)arg2 notifyingObservers:(BOOL)arg3;
+-(id)insertIcon:(id)arg1 atIndex:(unsigned long long)arg2;
+-(id)insertIcon:(id)arg1 atIndex:(unsigned long long)arg2 options:(unsigned long long)arg3;
+-(void)removeIconAtIndex:(unsigned long long)arg1;
+-(void)markIconStateClean;
+-(void)markIconStateDirty;
 @end
 
 @interface SBIconListView
+-(void)removeAllIconViews;
 @property (nonatomic,copy,readonly) NSArray* icons;
 -(id)iconViewForIcon:(id)arg1;
+@property (getter=isFull,nonatomic,readonly) BOOL full;
 @property (nonatomic,retain) SBIconListModel* model;
+-(void)setIconsNeedLayout;
+-(void)layoutIconsIfNeeded:(double)arg1 ;
+-(void)layoutIconsNow;
 @end
 
 @interface SBFolderController
 @property (nonatomic,copy,readonly) NSArray* iconListViews; // array of SBIconListView
--(id)addEmptyListView; // TODO: Use when putting down icons. Remove all list views, add a new one until were out of icons
+-(id)addEmptyListView;
+-(void)layoutIconLists:(double)arg1 animationType:(long long)arg2 forceRelayout:(BOOL)arg3;
+-(id)firstIconViewForIcon:(id)arg1;
 @end
 
 @interface SBRootFolderController : SBFolderController
 @end
 
+@interface SBIconImageView
+@property (nonatomic,readonly) UIImage * displayedImage;
+@end
+
 @interface SBIconView
-@property (nonatomic,readonly) UIImage* iconImageSnapshot;
+-(SBIconImageView*)_iconImageView; // SBIconImageView
+@property (nonatomic,retain) SBIcon * icon;
 @end
 
 @interface SBIconController
@@ -118,34 +134,100 @@
 @property (getter=_currentFolderController,nonatomic,readonly) SBFolderController * currentFolderController;
 @end
 
+@interface HueComparator : NSObject
+@end
+
+@implementation HueComparator
++(NSComparator)compare {
+	return ^(SBIconView* icon1, SBIconView* icon2) {
+		NSArray* hues = [HueComparator hueForIcons:[NSArray arrayWithObjects: icon1, icon2, nil]];
+
+		if (hues[0] > hues[1]) return (NSComparisonResult) NSOrderedDescending;
+		if (hues[0] < hues[1]) return (NSComparisonResult) NSOrderedAscending;
+		return (NSComparisonResult) NSOrderedSame;
+	};
+}
+// IconArray becomes HueArray
++(NSArray*)hueForIcons:(NSArray*)icons {
+	NSMutableArray* result = [NSMutableArray arrayWithCapacity:[icons count]];
+	[icons enumerateObjectsUsingBlock:^(SBIconView* iconView, NSUInteger idx, BOOL *stop) {
+		uint hue = 0;
+		if ([iconView.icon isFolderIcon]) {
+			// RLog(@"Folder = %@", [iconView.icon displayName]); // folders have an -(SBFolder)folder. SBFolderView with SBIconScrollView to get apps
+		} else {
+			// RLog(@"Icon = %@", [iconView.icon displayName]);
+			UIImage* image  = [iconView _iconImageView].displayedImage;
+			hue = [image hue];
+		}
+		[result addObject:[NSNumber numberWithUnsignedInt:hue]];
+	}];
+
+	return result;
+}
+@end
+
 %hook SBIconController
 %new
 -(void)sort {
-	// TODO: Dictionary of all icons, then sort and re-place them
 	// Each icon is either an application or a folder (or an internet shortcut ig)
-	for (SBIconListView* listView in [self._rootFolderController iconListViews]) {
-		RLog(@"%@", [listView model]);//SBIconListModel to control icon placement?!
-		RLog(@"There are %d icons", [[listView icons] count]);
-		NSArray* reverse = [[[listView icons] reverseObjectEnumerator] allObjects];
-		[[listView model] setIcons:reverse];
+	NSMutableArray<SBIconView*>* iconViews = [NSMutableArray array]; // list of SBIconView
+	for (SBIconListView* listView in self._rootFolderController.iconListViews) {
 		for (SBIcon* icon in [listView icons]) {
-			float hue = 0;
-			if ([icon isFolderIcon]) {
-				RLog(@"Folder = %@", [icon displayName]); // folders have an -(SBFolder)folder. SBFolderView with SBIconScrollView to get apps
-			} else {
-				RLog(@"Icon = %@", [icon displayName]);
-				SBIconView* iconView = [listView iconViewForIcon: icon];
-				UIImage* image  = iconView.iconImageSnapshot;
-				hue = [image hue];
-			}
-			RLog(@"Hue = %f", hue);
+			SBIconView* iconView = [listView iconViewForIcon:icon];
+			if ([iconView icon] == nil) RLog(@"No iconView icon for %@", [icon displayName]);
+			[iconViews addObject:iconView];
 		}
 	}
+	NSArray<SBIconView*>* sortedIconViews = /* iconViews; // */[iconViews sortedArrayUsingComparator:[HueComparator compare]];
+	NSMutableArray<SBIcon*>* sortedIcons = [NSMutableArray arrayWithCapacity:[sortedIconViews count]];
+	[sortedIconViews enumerateObjectsWithOptions:NSEnumerationReverse usingBlock:^(SBIconView* iconView, NSUInteger idx, BOOL* stop) {
+		[sortedIcons addObject:iconView.icon]; // NSEnumerationReverse NSEnumerationConcurrent
+	}];
+	RLog(@"You have %d icons!", sortedIcons.count);
+
+
+	// Add icons
+	int iconListViewIndex = 0;
+	int iconListIndex = 0;
+	SBIconListView* listView = [self._rootFolderController.iconListViews objectAtIndex:iconListViewIndex];
+	// [listView.model removeAllIcons];
+	for (SBIcon* icon in sortedIcons) {
+		if (icon == nil) RLog(@"Icon is nil! %@!", icon);
+		
+		if (iconListIndex >= 24) {
+			iconListViewIndex++;
+			iconListIndex = 0;
+			[listView setIconsNeedLayout];
+			[listView layoutIconsIfNeeded:1];
+			[self._rootFolderController layoutIconLists:iconListViewIndex animationType:0 forceRelayout:YES];
+			[listView.model markIconStateDirty];
+			[listView.model markIconStateClean];
+			listView = [self._rootFolderController.iconListViews objectAtIndex:iconListViewIndex];
+			// [listView.model removeAllIcons];
+		}
+
+		// [listView.model placeIcon:icon atIndex:iconListIndex];
+		[listView.model removeIconAtIndex:iconListIndex];
+		[listView.model insertIcon:icon atIndex:iconListIndex options:0];
+
+		// TODO: Somehow save now
+		
+		iconListIndex++;
+	}
+	[listView.model markIconStateDirty];
+	[listView.model markIconStateClean];
+
+	/*
+	PICK UP:
+	placeIcon1 index 7
+	placeIcon2 index 7 obs 1
+
+	PUT DOWN
+	inserticon1 index 6 option 0
+	placeIcon2 index 6 obs 0
+	*/
 }
 %end
-
-
-
 
 
 @interface AlertWindow : UIWindow
@@ -231,13 +313,6 @@ static BOOL alertShowing = NO;
 	AudioServicesPlaySystemSound(1519); // light haptic feedback
 	RLog(@"menu will now pop up");
 
-	/*NSDictionary* apps = [[ALApplicationList sharedApplicationList] applications];
-	for (NSString* app in apps) {
-		UIImage* icon = [[ALApplicationList sharedApplicationList] iconOfSize:ALApplicationIconSizeLarge forDisplayIdentifier:app];
-		if (icon == nil) RLog(@"App %@ has no icon, skip it", apps[app]);
-		else RLog(@"App %@ has an icon. Now implement getting the avg. color!", apps[app]);
-	}*/
-
 	[[[AlertWindow alloc] init] showAlert];
 
     [event setHandled: YES];
@@ -252,3 +327,36 @@ static BOOL alertShowing = NO;
 %ctor {
 	[LASharedActivator registerListener:[[AppSort13 alloc] init] forName:@"nl.timvd.appsort13"];	
 }
+
+/*
+%hook SBIconListModel
+-(id)insertIcon:(id)arg1 atIndex:(unsigned long long)arg2 options:(unsigned long long)arg3  {
+	RLog(@"inserticon1 index %d option %d", arg2, arg3);
+	return %orig;
+	}
+-(id)insertIcon:(id)arg1 atIndex:(unsigned long long)arg2  {
+	RLog(@"inserticon2 index %d", arg2);
+	return %orig;
+}
+-(id)placeIcon:(id)arg1 atIndex:(unsigned long long)arg2 {
+	RLog(@"placeIcon1 index %d", arg2);
+	return %orig;
+}
+-(id)placeIcon:(id)arg1 atIndex:(unsigned long long)arg2 notifyingObservers:(BOOL)arg3  {
+	RLog(@"placeIcon2 index %d obs %d", arg2, arg3);
+	return %orig;
+}
+-(void)removeIconAtIndex:(unsigned long long)arg1 {
+	RLog(@"Removing icon at index %d", arg1);
+	%orig;
+}
+-(void)markIconStateClean {
+	RLog(@"Marked as clean");
+	%orig;
+}
+-(BOOL)addIcon:(id)arg1 asDirty:(BOOL)arg2 {
+	RLog(@"Added icon %@ as DIRTY: %d", arg1, arg2);
+	return %orig;
+}
+%end
+*/

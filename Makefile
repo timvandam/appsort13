@@ -12,7 +12,7 @@ TWEAK_NAME = appsort13
 
 appsort13_FILES = Tweak.x
 appsort13_CFLAGS = -fobjc-arc
-appsort13_LIBRARIES = activator applist
+appsort13_LIBRARIES = activator
 appsort13_FRAMEWORKS = AudioToolbox UIKit CoreImage
 
 include $(THEOS_MAKE_PATH)/tweak.mk
