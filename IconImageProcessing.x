@@ -1,4 +1,5 @@
 #import <IconImageProcessing.h>
+#import <SBInterfaces.h>
 
 // TODO: Loop over all pixels, add to map with count of that color. Color should be within range X of another color for it to not be a new color
 // Pick top 3 and pick the one with the highest saturation
@@ -51,5 +52,35 @@
 	result += B;
 
 	return result / (R+G+B);
+}
+@end
+
+
+@implementation HueComparator
++(NSComparator)compare {
+	return ^(SBIconView* icon1, SBIconView* icon2) {
+		NSArray* hues = [HueComparator hueForIcons:[NSArray arrayWithObjects: icon1, icon2, nil]];
+
+		if (hues[0] > hues[1]) return (NSComparisonResult) NSOrderedDescending;
+		if (hues[0] < hues[1]) return (NSComparisonResult) NSOrderedAscending;
+		return (NSComparisonResult) NSOrderedSame;
+	};
+}
+// IconArray becomes HueArray
++(NSArray*)hueForIcons:(NSArray*)icons {
+	NSMutableArray* result = [NSMutableArray arrayWithCapacity:[icons count]];
+	[icons enumerateObjectsUsingBlock:^(SBIconView* iconView, NSUInteger idx, BOOL *stop) {
+		uint hue = 0;
+		if ([iconView.icon isFolderIcon]) {
+			// RLog(@"Folder = %@", [iconView.icon displayName]); // folders have an -(SBFolder)folder. SBFolderView with SBIconScrollView to get apps
+		} else {
+			// RLog(@"Icon = %@", [iconView.icon displayName]);
+			UIImage* image  = [iconView _iconImageView].displayedImage;
+			hue = [image hue];
+		}
+		[result addObject:[NSNumber numberWithUnsignedInt:hue]];
+	}];
+
+	return result;
 }
 @end
