@@ -63,9 +63,6 @@
 	result += (R << 16);
 	result += (G << 8);
 	result += B;
-	result *= R;
-	result *= G;
-	result *= B;
 
 	return result / (R+G+B);
 }
@@ -190,11 +187,11 @@
 	int iconListViewIndex = 0;
 	int iconListIndex = 0;
 	SBIconListView* listView = [self._rootFolderController.iconListViews objectAtIndex:iconListViewIndex];
-	// [listView.model removeAllIcons];
+	[listView.model removeAllIcons];
 	for (SBIcon* icon in sortedIcons) {
 		if (icon == nil) RLog(@"Icon is nil! %@!", icon);
 		
-		if (iconListIndex >= 24) {
+		if (listView.isFull) {
 			iconListViewIndex++;
 			iconListIndex = 0;
 			[listView setIconsNeedLayout];
@@ -203,7 +200,7 @@
 			[listView.model markIconStateDirty];
 			[listView.model markIconStateClean];
 			listView = [self._rootFolderController.iconListViews objectAtIndex:iconListViewIndex];
-			// [listView.model removeAllIcons];
+			[listView.model removeAllIcons];
 		}
 
 		// [listView.model placeIcon:icon atIndex:iconListIndex];
